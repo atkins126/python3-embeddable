@@ -3,9 +3,6 @@
 set -e
 set -x
 
-# Install requirements
-brew install xz
-
 if [ $ARCH = "x86_64" ] || [ $ARCH = "universal2" ]; then
     echo "Building Python for $ARCH"
     mkdir $ARCH    
@@ -36,19 +33,27 @@ popd
 
 # ---------------- #
 
-pushd $PY_SRC_DIR
+# Create the pre-built directory by extracting the zip file
+mv -f ../MacOS/prebuiltdeps.tar.gz $THIS_DIR
+tar --no-same-owner -xf $THIS_DIR/prebuiltdeps.tar.gz
 
-# Configure and make Python from source
+# Copy our custom build-script to the BuildScript folder
+mv -f -v ../MacOS/build-installer.py $PY_SRC_DIR/Mac/BuildScript/
+mv -f -v ../MacOS/Makefile $PY_SRC_DIR/Doc/
+
+pushd $PY_SRC_DIR/Mac/BuildScript/
+
+# Runs the build-script
 if [ $ARCH = "universal2" ]; then
-  ./configure --prefix=/usr "$@" --enable-shared --enable-universalsdk --with-universal-archs=universal2
+  python3 build-installer.py --build-dir="$THIS_DIR/build" --third-party="$THIS_DIR/build/third-party" --prebuilt-deps="$THIS_DIR/prebuiltdeps" --dep-target=12 --universal-archs=universal2
 else
-  ./configure --prefix=/usr "$@" --enable-shared
+  python3 build-installer.py --build-dir="$THIS_DIR/build" --third-party="$THIS_DIR/build/third-party" --dep-target=10.15 --universal-archs=intel-64
 fi
-make
-make install DESTDIR="$THIS_DIR/build"
 
 popd
 
 # Create the embeddable dir and moves Python distribution into it
+PYSIMPLEVER=$(cut -d '.' -f 1,2 <<< "$PYVER")
 mkdir -p embedabble
-mv build/usr/* embedabble
+
+mv -v build/_root/usr/local/* "$THIS_DIR/embedabble/"
